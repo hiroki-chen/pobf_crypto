@@ -79,9 +79,8 @@ impl KeyPair {
         )
         .map_err(|e| {
             error!("[-] Failed to compute the session key. {:?}", e);
-            return Unspecified;
-        })
-        .unwrap();
+            Unspecified
+        })?;
 
         #[cfg(feature = "sev")]
         // Truncate the session key.
@@ -92,9 +91,8 @@ impl KeyPair {
             .duration_since(time::UNIX_EPOCH)
             .map_err(|e| {
                 error!("[-] Failed to get the time. {:?}", e);
-                return Unspecified;
-            })
-            .unwrap()
+                Unspecified
+            })?
             .as_secs();
 
         debug!("[+] The session key sampled as {:?}", self.session_key);
@@ -103,12 +101,10 @@ impl KeyPair {
     }
 
     pub fn encrypt_with_smk(&self, input: &[u8]) -> PobfCryptoResult<Vec<u8>> {
-        let aesctx = Aes128Gcm::new_from_slice(&self.session_key)
-            .map_err(|e| {
-                error!("[-] Failed to create AES context due to {:?}", e);
-                return Unspecified;
-            })
-            .unwrap();
+        let aesctx = Aes128Gcm::new_from_slice(&self.session_key).map_err(|e| {
+            error!("[-] Failed to create AES context due to {:?}", e);
+            Unspecified
+        })?;
         let nonce = Nonce::from_slice(&[0u8; 12]);
 
         match aesctx.encrypt(&nonce, input) {
@@ -121,12 +117,10 @@ impl KeyPair {
     }
 
     pub fn decrypt_with_smk(&self, input: &[u8]) -> PobfCryptoResult<Vec<u8>> {
-        let aesctx = Aes128Gcm::new_from_slice(&self.session_key)
-            .map_err(|e| {
-                error!("[-] Failed to create AES context due to {:?}", e);
-                return Unspecified;
-            })
-            .unwrap();
+        let aesctx = Aes128Gcm::new_from_slice(&self.session_key).map_err(|e| {
+            error!("[-] Failed to create AES context due to {:?}", e);
+            Unspecified
+        })?;
         let nonce = Nonce::from_slice(&[0u8; 12]);
 
         match aesctx.decrypt(&nonce, input) {
@@ -160,7 +154,7 @@ fn key_derive_function(shared_key: &[u8], label: &[u8]) -> PobfCryptoResult<Vec<
 
     // Use an empty key to get the hashed derive key from the shared session key.
     let key = [0u8; ECC_SESSION_KEY_LEN];
-    let mut mac = <Cmac<Aes128> as Mac>::new_from_slice(&key).unwrap();
+    let mut mac = <Cmac<Aes128> as Mac>::new_from_slice(&key).map_err(|_| Unspecified)?;
     mac.update(shared_key_rev.as_slice());
     // Used for a second Cmac.
     let derive_key = mac.finalize().into_bytes();
@@ -171,7 +165,7 @@ fn key_derive_function(shared_key: &[u8], label: &[u8]) -> PobfCryptoResult<Vec<
     derivation[1..derivation_len - 3].copy_from_slice(label);
     derivation[derivation_len - 3..].copy_from_slice(KDF_CMAC_MAGIC);
 
-    mac = <Cmac<Aes128> as Mac>::new_from_slice(&derive_key).unwrap();
+    mac = <Cmac<Aes128> as Mac>::new_from_slice(&derive_key).map_err(|_| Unspecified)?;
     mac.update(derivation.as_slice());
 
     Ok(mac.finalize().into_bytes().to_vec())
@@ -182,7 +176,7 @@ pub fn handle_enclave_pubkey(
     reader: &mut BufReader<TcpStream>,
 ) -> PobfCryptoResult<UnparsedPublicKey<Vec<u8>>> {
     let mut key_buf = vec![0u8; P256_PUBKEY_LEN + 1];
-    reader.read_exact(&mut key_buf).unwrap();
+    reader.read_exact(&mut key_buf).map_err(|_| Unspecified)?;
     key_buf.truncate(P256_PUBKEY_LEN);
 
     // Convert the endianness.
@@ -200,7 +194,7 @@ pub fn handle_sev_pubkey(
     reader: &mut BufReader<TcpStream>,
 ) -> PobfCryptoResult<UnparsedPublicKey<Vec<u8>>> {
     let mut key_buf = vec![0u8; 0x20];
-    reader.read_exact(&mut key_buf).unwrap();
+    reader.read_exact(&mut key_buf).map_err(|_| Unspecified)?;
     Ok(UnparsedPublicKey::new(&X25519, key_buf))
 }
 
@@ -210,30 +204,30 @@ pub fn open_session() -> PobfCryptoResult<(EphemeralPrivateKey, PublicKey)> {
     let private_key = EphemeralPrivateKey::generate(&ECDH_P256, &rng)
         .map_err(|_| {
             error!("[-] Cannot generate ephemeral key pair.");
-            return Unspecified;
+            Unspecified
         })
-        .unwrap();
+        .map_err(|_| Unspecified)?;
     #[cfg(feature = "sev")]
     let private_key = EphemeralPrivateKey::generate(&X25519, &rng)
         .map_err(|_| {
             error!("[-] Cannot generate ephemeral key pair.");
-            return Unspecified;
+            Unspecified
         })
-        .unwrap();
+        .map_err(|_| Unspecified)?;
 
     let public_key = private_key
         .compute_public_key()
         .map_err(|_| {
             error!("[-] Cannot compute public key from private key on the given P256 curve.");
-            return Unspecified;
+            Unspecified
         })
-        .unwrap();
+        .map_err(|_| Unspecified)?;
 
     Ok((private_key, public_key))
 }
 
 pub fn sign_with_ecdsa(message: &[u8]) -> PobfCryptoResult<Vec<u8>> {
-    let parsed_pem = parse(ECC_KEY).unwrap();
+    let parsed_pem = parse(ECC_KEY).map_err(|_| Unspecified)?;
 
     let ecdsa_keypair = signature::EcdsaKeyPair::from_pkcs8(
         &signature::ECDSA_P256_SHA256_ASN1_SIGNING,
@@ -241,18 +235,18 @@ pub fn sign_with_ecdsa(message: &[u8]) -> PobfCryptoResult<Vec<u8>> {
     )
     .map_err(|e| {
         error!("[-] Failed to construct ECDSA key pair! {:?}", e);
-        return Unspecified;
+        Unspecified
     })
-    .unwrap();
+    .map_err(|_| Unspecified)?;
 
     // Sign this message.
     let signature = ecdsa_keypair
         .sign(&ring::rand::SystemRandom::new(), message)
         .map_err(|_| {
             error!("[-] Signing failed.");
-            return Unspecified;
+            Unspecified
         })
-        .unwrap();
+        .map_err(|_| Unspecified)?;
 
     Ok(signature.as_ref().to_vec())
 }
