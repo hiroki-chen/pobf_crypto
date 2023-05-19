@@ -72,7 +72,7 @@ impl KeyPair {
         label: &[u8],
     ) -> PobfCryptoResult<()> {
         self.session_key = agree_ephemeral(
-            self.prv_k.as_ref().unwrap().clone(),
+            self.prv_k.take().unwrap(),
             peer_pub_key,
             ring::error::Unspecified,
             |key_materials| key_derive_function(key_materials, label),
