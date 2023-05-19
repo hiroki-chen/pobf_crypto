@@ -8,12 +8,15 @@ edition = "2021"
 [dependencies]
 aes = "0.8.2"
 aes-gcm = "0.10.1"
+anyhow = { version = "1.0.71", optional = true }
 cmac = "0.7.2"
 log = "0.4.17"
 pem = "2.0.1"
-ring = "0.16.20"
+ring = { version = "0.16.20", optional = true }
+x25519-dalek = { version = "1.2.0", optional = true }
 
 [features]
-default = ["sgx"]
-sgx = []
-sev = []
+default = ["wasi_support"]
+sgx = ["ring"]
+sev = ["ring"]
+wasi_support = ["x25519-dalek", "anyhow"]
