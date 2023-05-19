@@ -16,7 +16,7 @@ ring = { version = "0.16.20", optional = true }
 x25519-dalek = { version = "1.2.0", optional = true }
 
 [features]
-default = ["wasi_support"]
+default = []
 sgx = ["ring"]
 sev = ["ring"]
 wasi_support = ["x25519-dalek", "anyhow"]
