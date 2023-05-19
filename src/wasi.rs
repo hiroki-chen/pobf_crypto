@@ -1,5 +1,12 @@
+use std::{
+    io::{BufReader, Read},
+    net::TcpStream,
+};
+
 use aes_gcm::{aead::Aead, Aes128Gcm, KeyInit, Nonce};
 use anyhow::{anyhow, Result};
+use log::info;
+use rand_core::*;
 use x25519_dalek::{EphemeralSecret, PublicKey};
 
 pub struct KeyPair {
@@ -59,4 +66,28 @@ impl KeyPair {
             Err(e) => Err(anyhow!("[-] Failed to decrypt the data: {e}")),
         }
     }
+}
+
+pub fn open_session() -> Result<(EphemeralSecret, PublicKey)> {
+    let private_key = EphemeralSecret::random_from_rng(OsRng);
+    let public_key = PublicKey::from(&private_key);
+
+    Ok((private_key, public_key))
+}
+
+pub fn init_keypair() -> Result<KeyPair> {
+    // Generate key pair.
+    info!("[+] Sampling EC key pair.");
+    let keypair = open_session()?;
+    info!("[+] Succeeded.");
+
+    Ok(KeyPair::new(keypair, vec![]))
+}
+
+pub fn handle_sev_pubkey(reader: &mut BufReader<TcpStream>) -> Result<[u8; 32]> {
+    let mut key_buf = [0u8; 32];
+    reader
+        .read_exact(&mut key_buf)
+        .map_err(|e| anyhow!("Fail to read the socket: {e}"))?;
+    Ok(key_buf)
 }
